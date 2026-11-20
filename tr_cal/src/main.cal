@@ -1,0 +1,175 @@
+import Args from std::env;
+import stderr from std::console;
+
+type Set:<T> := struct {
+  value : T,
+  complement : bool,  
+};
+
+type ArgState := enum {
+  Delete,
+  Squeeze,
+};
+
+type Operation := enum {
+  Range : <char, char>,
+  Letter : char
+}
+
+const convert_str_to_operations := fn (value : str) -> list:<Operation> => {
+  let mut operations := list:<Operation>[];
+  let mut in_range := false;
+  let mut left : char? = none;
+
+  for ch in value =>
+    match left {
+      .Some : _ if ch = '-' => in_range := true,
+      .Some : let v if in_range => {
+        operations <<= Operation.Range : (v, ch);
+        in_range := false;
+        left := none;
+      },
+      .Some : let v => {
+        operations <<= Operation.Letter : v;
+        left := some(ch);
+      },
+      _ => left := some(ch)
+    }
+
+  if let .Some : let v <- left => operations <<= Operation.Letter : v;
+  return operations
+}
+
+const evaluate := fn (text : str, ops : Set:<list:<Operation>>, state : ArgState) -> str => {
+  let mut text := text;
+  let mut characters := list:<char>[];
+
+  for i in len(ops.value) => {
+    let op : Operation := ops.value[i]!;
+    
+    match state {
+      .Delete if !ops.complement => match op {
+        .Letter : let v => {
+          text := text.replace(v as! str, "");
+        },
+        .Range : (let start, let end) => {
+          let mut start := start as! int;
+          let mut end := end as! int;
+          if start > end => (start, end) := (end, start);
+
+          for ch in start..=end =>
+            text := text.replace((ch as! char) as! str, ""); 
+        }
+      },
+      _ => match op {
+        .Letter : let v => {
+          characters <<= v;
+        },
+        .Range : (let start, let end) => {
+          let mut start := start as! int;
+          let mut end := end as! int;
+          if start > end => (start, end) := (end, start);
+
+          for ch in start..=end =>
+            characters <<= ch as! char; 
+        }
+      },
+    }
+  }
+
+  if !characters.is_empty() => {
+    let mut out := "";
+
+    match state {
+      .Delete =>
+        for ch in text =>
+          if ch in characters => out &= ch,
+      .Squeeze => {
+        let mut current := none;
+        for ch in text => {
+          let within := ch in characters;
+
+          if (!within) if ops.complement else within => {
+            if let .Some : let c <- current =>
+              if c != ch =>
+                out &= c;
+
+            current := some(ch);
+          } else => {
+            if let .Some : let c <- current => {
+              out &= c;
+              current := none;
+            }
+
+            out &= ch;
+          }
+        }
+      },
+    }
+    
+    return out
+  }
+  return text
+}
+
+const main := fn => {
+  let args : list:<str> = Args.all();
+
+  let mut values := list:<str>[];
+  let mut deleting := list:<Set:<str>>[];
+  let mut squeezing := list:<Set:<str>>[];
+
+  let mut complement := false;
+  let mut state : ArgState? = none;
+  
+  for arg in args => {
+    match arg {
+      "-" & _ => {
+        for ch in arg => {
+          match ch {
+            '-' => {},
+            'c' => complement := true,
+            'd' => state := some(ArgState.Delete),
+            's' => state := some(ArgState.Squeeze),
+            let ch => {
+              fmt"Invalid argument entered {ch}\n" |> stderr
+              return
+            }
+          }
+        }
+      },
+      let value => {
+        if let .Some : let current_state <- state => {
+          match current_state {
+            .Delete => deleting <<= Set:<str> {value, complement},
+            .Squeeze => squeezing <<= Set:<str> {value, complement},
+          }
+
+          state := none;
+          complement := false;
+        } else => {
+          values <<= value;
+          complement := false;
+        }
+      }
+    }
+  }
+
+  if values.is_empty() => {
+    stderr("Please enter an input string\n");
+    return
+  }
+
+  let deleting := [Set:<Operation> { value : convert_str_to_operations(x.value), complement : x.complement} for x in deleting];
+  let squeezing := [Set:<Operation> { value : convert_str_to_operations(x.value), complement : x.complement} for x in squeezing];
+
+  let mut value := values[0]!;
+
+  for op in deleting =>
+    value := evaluate(value, op, ArgState.Delete);  
+
+  for op in squeezing =>
+    value := evaluate(value, op, ArgState.Squeeze);
+
+  print(value);
+};
