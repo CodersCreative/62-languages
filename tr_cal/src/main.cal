@@ -104,6 +104,8 @@ const evaluate := fn (text : str, ops : Set:<list:<Operation>>, state : ArgState
             out &= ch;
           }
         }
+
+        if let .Some : x <- current => out &= x;
       },
     }
     

@@ -98,6 +98,9 @@ evaluate = (text, ops, state) ->
 
             out += ch
 
+        if current?
+          out += current
+
     return out
 
   return text

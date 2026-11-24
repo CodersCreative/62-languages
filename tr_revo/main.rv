@@ -1,0 +1,187 @@
+fn convert_str_to_operations(value) do
+  let operations = {}
+  let in_range = :false
+  let left = :nil
+
+  for ch in value do
+    if left != :nil do
+      if ch == '-' do
+        in_range = :true
+      end else if in_range do
+        operations:push({value = left, to = ch})
+        in_range = :false
+        left = :nil
+      end else do
+        operations:push({value = left, to = :nil})
+        left = ch
+      end
+    end else do
+      left = ch
+    end
+  end
+
+  if left != :nil do
+    operations:push({value = left, to = :nil})
+  end
+
+  return operations
+end
+
+fn contains(value, target) do
+  for item in value do
+    if item == target do
+      return :true
+    end
+  end
+
+  return :false
+end
+
+fn evaluate(text, ops, state) do
+  let characters = {}
+
+  for i in 0..len(ops.value) do
+    let op = ops.value[i]
+    if op == :nil do break end
+
+    if state == :delete and not ops.complement do
+      if op.to != :nil do
+        let start = op.value:ascii()
+        let last = op.value:ascii()
+
+        if start > last do
+          let tmp = start
+          start = last
+          last = tmp
+        end
+
+        for ch in start..last do
+          text = text:replace(string_of(ch), "")
+        end
+      end else do
+        text = text:replace(op.value, "")
+      end
+    end else do
+      if op.to != :nil do
+        let start = op.value:ascii()
+        let last = op.value:ascii()
+
+        if start > last do
+          let tmp = start
+          start = last
+          last = tmp
+        end
+
+        for ch in start..last do
+          characters:push(string_of(ch))
+        end       
+      end else do
+        characters:push(op.value)
+      end
+    end
+  end
+
+  if len(characters) > 0 do
+    let out = ""
+
+    if state == :delete do
+      for ch in text do
+        if contains(characters, ch) do
+          out ~= ch
+        end
+      end
+    end else if state == :squeeze do
+      let current = :nil
+      for ch in text do
+        let within = contains(characters, ch)
+        let within = if ops.complement do
+          not within
+        end else do
+          within
+        end
+
+        if within do
+          if current != :nil do
+            if current != ch do
+              out ~= current
+            end
+          end
+
+          current = ch
+        end else do
+          if current != :nil do
+            out ~= current
+            current = :nil
+          end
+
+          out ~= ch
+        end
+      end
+      return out
+    end
+  end
+
+  return text
+end
+
+fn main() do
+  let values = {}
+  let deleting = {}
+  let squeezing = {}
+
+  let complement = :false
+  let state = :nil
+
+  for i in 1..len(argv) do
+    let arg = argv[i]
+
+    if arg[0] == '+' do
+      for i in 1..len(arg) do
+        match arg[i]
+        | '+' => {}
+        | 'c' => complement = :true
+        | 'd' => state = :delete
+        | 's' => state = :squeeze
+        | ch => do
+          print("Invalid argument entered " ~ ch)
+          return 
+        end
+      end
+    end else if state != :nil do
+      match state
+      | :delete => deleting:push({ value = arg, complement = complement})
+      | :squeeze => squeezing:push({ value = arg, complement = complement})
+
+      state = :nil
+      complement = :false
+    end else do
+      values:push(arg)
+      complement = :false
+    end
+  end
+  
+  if len(values) <= 0 do
+    print("Please enter an input string")
+    return
+  end
+  
+  let converted_deleting = deleting
+    |> _:map(fn(x) {value = convert_str_to_operations(x.value), complement = x.complement})
+
+  let converted_squeezing = squeezing
+    |> _:map(fn(x) {value = convert_str_to_operations(x.value), complement = x.complement})
+
+  let value = values[0]
+
+  for op in converted_deleting do
+    value = evaluate(value, op, :delete)
+  end
+
+  for op in converted_squeezing do
+    value = evaluate(value, op, :squeeze)
+  end
+
+  print(value)
+end
+
+main()
